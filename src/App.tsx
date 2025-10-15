@@ -1,34 +1,24 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { Outlet } from 'react-router-dom'
+import { Nav } from './components/Nav'
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <>
-      <div>
-        <a href="https://vitejs.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="min-h-screen bg-egDark text-white">
+      <div className="pointer-events-none fixed inset-x-0 top-0 h-72 bg-eg-gradient opacity-20 blur-3xl" />
+      <div className="pointer-events-none fixed inset-y-0 right-0 w-48 bg-eg-gradient opacity-10 blur-3xl" />
+      <div className="relative z-10 flex min-h-screen flex-col">
+        <Nav />
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-12">
+          <Outlet />
+        </main>
+        <footer className="border-t border-white/5 bg-egDark/80">
+          <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-4 py-6 text-xs text-white/40 sm:flex-row sm:items-center sm:justify-between">
+            <span>© {new Date().getFullYear()} Edens Gates.</span>
+            <span>Built for the Magic Eden community.</span>
+          </div>
+        </footer>
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    </div>
   )
 }
 
