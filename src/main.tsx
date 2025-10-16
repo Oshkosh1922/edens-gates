@@ -12,6 +12,7 @@ import { NotFound } from './pages/NotFound'
 import { Submit } from './pages/Submit'
 import { Vote } from './pages/Vote'
 import { Winners } from './pages/Winners'
+import { WalletContextProvider } from './lib/wallet.tsx'
 
 const router = createBrowserRouter([
   {
@@ -30,6 +31,8 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <WalletContextProvider>
+      <RouterProvider router={router} />
+    </WalletContextProvider>
   </StrictMode>,
 )

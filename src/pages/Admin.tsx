@@ -1,4 +1,6 @@
+// Visual Pass — Logic Preserved
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Shell } from '../components/Shell'
 import {
   EDGE_FUNCTIONS_ENABLED,
@@ -149,54 +151,133 @@ export function Admin() {
       title="Admin control center"
       description="Approve founders, run weekly voting rounds, and publish final results. Actions write directly to Supabase."
     >
-      {message ? (
-        <p className={`text-sm ${message.kind === 'error' ? 'text-egPink' : 'text-emerald-300'}`}>{message.text}</p>
-      ) : null}
+      <AnimatePresence>
+        {message && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            className="mb-8"
+          >
+            <div className={`rounded-2xl border px-6 py-4 ${
+              message.kind === 'error' 
+                ? 'border-red-500/20 bg-red-500/10' 
+                : 'border-emerald-500/20 bg-emerald-500/10'
+            }`}>
+              <p className={`text-sm font-medium ${
+                message.kind === 'error' ? 'text-red-300' : 'text-emerald-300'
+              }`}>
+                {message.text}
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {showClientModeBanner ? (
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
-          Admin mode is running with client keys only. Set <code className="rounded bg-amber-500/20 px-1">VITE_USE_EDGE_FUNCTIONS=true</code> once Edge Functions are deployed to move privileged actions server-side.
-        </div>
+        <motion.div 
+          className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-6 py-4 mb-8"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+        >
+          <p className="text-sm text-amber-200 leading-relaxed">
+            <span className="font-semibold">Development Mode:</span> Admin actions are running with client keys only. 
+            Set <code className="rounded bg-amber-500/20 px-2 py-1 font-mono text-xs">VITE_USE_EDGE_FUNCTIONS=true</code> once Edge Functions are deployed to move privileged actions server-side.
+          </p>
+        </motion.div>
       ) : null}
 
       {loading ? (
-        <div className="flex w-full items-center justify-center rounded-2xl border border-white/5 bg-white/5 py-20 text-white/60">
-          Loading founder data…
-        </div>
+        <motion.div 
+          className="glass-panel flex w-full items-center justify-center py-20"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+        >
+          <div className="flex items-center gap-3 text-white/70">
+            <motion.div
+              className="h-5 w-5 rounded-full border-2 border-white/30 border-t-egPink"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            />
+            <span className="font-medium">Loading founder data…</span>
+          </div>
+        </motion.div>
       ) : (
-        <div className="space-y-10">
-          <section className="space-y-4">
-            <header className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">Pending approvals</h2>
-              <span className="text-xs text-white/40">{pendingFounders.length} awaiting</span>
-            </header>
-            {pendingFounders.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-white/10 p-8 text-sm text-white/40">
-                No pending submissions. Founders will appear here once they apply.
+        <motion.div 
+          className="space-y-12"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <motion.section 
+            className="glass-panel p-8"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <motion.header 
+              className="flex items-center justify-between mb-6"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-3 w-3 rounded-full bg-amber-400 animate-pulse" />
+                <h2 className="text-2xl font-bold text-white">Pending Approvals</h2>
               </div>
+              <motion.div
+                className="flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-2"
+                whileHover={{ scale: 1.05 }}
+              >
+                <span className="text-sm font-semibold text-amber-300">
+                  {pendingFounders.length} awaiting
+                </span>
+              </motion.div>
+            </motion.header>
+            {pendingFounders.length === 0 ? (
+              <motion.div 
+                className="rounded-2xl border border-dashed border-white/[0.15] bg-white/[0.02] p-12 text-center"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.5 }}
+              >
+                <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center">
+                  <svg className="h-8 w-8 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </div>
+                <p className="text-base font-medium text-white/50">No pending submissions</p>
+                <p className="text-sm text-white/30 mt-1">Founders will appear here once they apply.</p>
+              </motion.div>
             ) : (
-              <div className="grid gap-4">
-                {pendingFounders.map((founder) => (
-                  <article
+              <div className="space-y-6">
+                {pendingFounders.map((founder, index) => (
+                  <motion.article
                     key={founder.id}
-                    className="rounded-2xl border border-white/5 bg-white/5 p-6 shadow-lg shadow-black/20"
+                    className="glass-panel p-6 hover:border-white/[0.15] transition-all duration-300"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 * index }}
                   >
-                    <div className="flex flex-col gap-4 md:flex-row md:justify-between">
-                      <div className="space-y-2">
+                    <div className="flex flex-col gap-6 lg:flex-row lg:justify-between">
+                      <div className="space-y-4 flex-1">
                         <div>
-                          <h3 className="text-xl font-semibold text-white">{founder.name}</h3>
-                          {founder.handle ? <p className="text-sm text-white/60">{founder.handle}</p> : null}
+                          <h3 className="text-xl font-bold text-white mb-1">{founder.name}</h3>
+                          {founder.handle ? <p className="text-sm text-white/60 font-medium">{founder.handle}</p> : null}
                         </div>
-                        <p className="text-sm leading-relaxed text-white/70">{founder.description}</p>
-                        <div className="flex flex-wrap gap-3 text-xs">
+                        <p className="text-base leading-relaxed text-white/80">{founder.description}</p>
+                        <div className="flex flex-wrap gap-3">
                           {founder.site_link ? (
                             <a
                               href={founder.site_link}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1 text-white/80 transition hover:text-white"
+                              className="inline-flex items-center gap-2 rounded-xl border border-white/[0.12] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/80 transition-all duration-200 hover:border-white/[0.2] hover:bg-white/[0.08] hover:text-white hover:scale-105 active:scale-95"
                             >
-                              Site ↗
+                              <span>Website</span>
+                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
                             </a>
                           ) : null}
                           {founder.video_url ? (
@@ -204,19 +285,22 @@ export function Admin() {
                               href={founder.video_url}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1 text-white/80 transition hover:text-white"
+                              className="inline-flex items-center gap-2 rounded-xl border border-white/[0.12] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/80 transition-all duration-200 hover:border-white/[0.2] hover:bg-white/[0.08] hover:text-white hover:scale-105 active:scale-95"
                             >
-                              Pitch video ↗
+                              <span>Pitch Video</span>
+                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h8M7 7h10a2 2 0 012 2v6a2 2 0 01-2 2H7a2 2 0 01-2-2V9a2 2 0 012-2z" />
+                              </svg>
                             </a>
                           ) : null}
                         </div>
                       </div>
-                      <div className="flex gap-3 self-end md:self-start">
+                      <div className="flex gap-3 lg:flex-col lg:w-32">
                         <button
                           type="button"
                           onClick={() => updateStatus(founder.id, 'rejected')}
                           disabled={actionState[founder.id]}
-                          className="rounded-full border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                          className="flex-1 lg:flex-none rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-300 transition-all duration-200 hover:border-red-500/50 hover:bg-red-500/20 hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
                         >
                           Reject
                         </button>
@@ -224,107 +308,195 @@ export function Admin() {
                           type="button"
                           onClick={() => updateStatus(founder.id, 'approved')}
                           disabled={actionState[founder.id]}
-                          className="rounded-full bg-eg-gradient px-4 py-2 text-sm font-semibold text-white shadow-glow transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="flex-1 lg:flex-none btn-primary disabled:cursor-not-allowed disabled:opacity-60 hover:scale-105 active:scale-95 disabled:hover:scale-100 transition-transform duration-200"
                         >
-                          Approve
+                          {actionState[founder.id] ? 'Processing...' : 'Approve'}
                         </button>
                       </div>
                     </div>
-                  </article>
+                  </motion.article>
                 ))}
               </div>
             )}
-          </section>
+          </motion.section>
 
-          <section className="space-y-4">
-            <header className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">Approved roster</h2>
-              <span className="text-xs text-white/40">{approvedFounders.length} total</span>
-            </header>
-            {approvedFounders.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-white/10 p-8 text-sm text-white/40">
-                No approved founders yet.
+          <motion.section 
+            className="glass-panel p-8"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6 }}
+          >
+            <motion.header 
+              className="flex items-center justify-between mb-6"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.7 }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-3 w-3 rounded-full bg-emerald-400" />
+                <h2 className="text-2xl font-bold text-white">Approved Roster</h2>
               </div>
+              <motion.div
+                className="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2"
+                whileHover={{ scale: 1.05 }}
+              >
+                <span className="text-sm font-semibold text-emerald-300">
+                  {approvedFounders.length} total
+                </span>
+              </motion.div>
+            </motion.header>
+            
+            {approvedFounders.length === 0 ? (
+              <motion.div 
+                className="rounded-2xl border border-dashed border-white/[0.15] bg-white/[0.02] p-12 text-center"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.8 }}
+              >
+                <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center">
+                  <svg className="h-8 w-8 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+                <p className="text-base font-medium text-white/50">No approved founders yet</p>
+              </motion.div>
             ) : (
-              <div className="grid gap-4">
-                {approvedFounders.map((founder) => (
-                  <article
+              <div className="space-y-4">
+                {approvedFounders.map((founder, index) => (
+                  <motion.article
                     key={founder.id}
-                    className="rounded-2xl border border-white/5 bg-white/5 p-6 shadow-lg shadow-black/20"
+                    className="glass-panel p-6 hover:border-white/[0.15] transition-all duration-300"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 * index }}
                   >
-                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <h3 className="text-xl font-semibold text-white">{founder.name}</h3>
-                        <p className="text-sm text-white/60">{founder.handle}</p>
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="flex-1">
+                        <h3 className="text-xl font-bold text-white mb-1">{founder.name}</h3>
+                        <p className="text-base text-white/60 font-medium">{founder.handle}</p>
                       </div>
                       <button
                         type="button"
                         onClick={() => toggleActive(founder.id, !founder.is_active)}
                         disabled={actionState[founder.id]}
-                        className={[
-                          'rounded-full px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60',
+                        className={`rounded-2xl px-6 py-3 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60 lg:min-w-[180px] hover:scale-105 active:scale-95 disabled:hover:scale-100 ${
                           founder.is_active
-                            ? 'bg-egPink text-white shadow-glow hover:opacity-90'
-                            : 'border border-white/10 text-white/70 hover:text-white',
-                        ].join(' ')}
+                            ? 'bg-gradient-to-r from-egPink to-egPurple text-white shadow-lg shadow-egPink/25 hover:shadow-egPink/35'
+                            : 'border border-white/[0.12] bg-white/[0.03] text-white/70 hover:border-white/[0.2] hover:bg-white/[0.08] hover:text-white'
+                        }`}
                       >
-                        {founder.is_active ? 'Active in round' : 'Activate for round'}
+                        {actionState[founder.id] 
+                          ? 'Processing...' 
+                          : founder.is_active 
+                          ? 'Active in round' 
+                          : 'Activate for round'
+                        }
                       </button>
                     </div>
-                  </article>
+                  </motion.article>
                 ))}
               </div>
             )}
-          </section>
+          </motion.section>
 
-          <section className="space-y-4">
-            <header className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">Publish weekly winner</h2>
-              <span className="text-xs text-white/40">{activeFounders.length} active</span>
-            </header>
-            <div className="rounded-2xl border border-white/5 bg-white/5 p-6 shadow-lg shadow-black/20">
-              <div className="grid gap-4 md:grid-cols-[2fr,1fr,auto] md:items-end">
-                <label className="space-y-2 text-sm text-white/70">
-                  <span>Active founder *</span>
+          <motion.section 
+            className="glass-panel p-8"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.9 }}
+          >
+            <motion.header 
+              className="flex items-center justify-between mb-6"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 1.0 }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-3 w-3 rounded-full bg-gradient-to-r from-egPurple to-egPink animate-pulse" />
+                <h2 className="text-2xl font-bold text-white">Publish Weekly Winner</h2>
+              </div>
+              <motion.div
+                className="flex items-center gap-2 rounded-full border border-egPink/30 bg-egPink/10 px-4 py-2"
+                whileHover={{ scale: 1.05 }}
+              >
+                <span className="text-sm font-semibold text-egPink">
+                  {activeFounders.length} active
+                </span>
+              </motion.div>
+            </motion.header>
+            
+            <motion.div 
+              className="glass-panel p-6"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 1.1 }}
+            >
+              <div className="grid gap-6 lg:grid-cols-[2fr,1fr,auto] lg:items-end">
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-white/80">
+                    Active founder *
+                  </label>
                   <select
                     value={selectedWinnerId}
                     onChange={(event) => setSelectedWinnerId(event.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-egDark px-4 py-3 text-sm text-white focus:border-egPink focus:outline-none"
+                    className="w-full rounded-2xl border border-white/[0.12] bg-white/[0.03] px-6 py-4 text-white backdrop-blur-xl transition-colors duration-200 focus:border-egPink/50 focus:bg-white/[0.08] focus:outline-none focus:ring-2 focus:ring-egPink/20"
                   >
-                    <option value="">Select founder</option>
+                    <option value="" className="bg-egDark text-white">Select founder</option>
                     {activeFounders.map((founder) => (
-                      <option key={founder.id} value={founder.id}>
+                      <option key={founder.id} value={founder.id} className="bg-egDark text-white">
                         {founder.name}
                       </option>
                     ))}
                   </select>
-                </label>
-                <label className="space-y-2 text-sm text-white/70">
-                  <span>Week number *</span>
+                </div>
+                
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-white/80">
+                    Week number *
+                  </label>
                   <input
                     value={weekNumber}
                     onChange={(event) => setWeekNumber(event.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-egDark px-4 py-3 text-sm text-white focus:border-egPink focus:outline-none"
+                    className="w-full rounded-2xl border border-white/[0.12] bg-white/[0.03] px-6 py-4 text-white backdrop-blur-xl transition-colors duration-200 focus:border-egPink/50 focus:bg-white/[0.08] focus:outline-none focus:ring-2 focus:ring-egPink/20"
                     placeholder="42"
                     inputMode="numeric"
                     min="1"
                   />
-                </label>
+                </div>
+                
                 <button
                   type="button"
                   onClick={handlePublishWinner}
                   disabled={publishLoading || activeFounders.length === 0}
-                  className="rounded-full bg-eg-gradient px-5 py-3 text-sm font-semibold text-white shadow-glow transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="btn-primary lg:min-w-[160px] disabled:cursor-not-allowed disabled:opacity-60 hover:scale-105 active:scale-95 disabled:hover:scale-100 transition-transform duration-200"
                 >
-                  {publishLoading ? 'Publishing…' : 'Publish winner'}
+                  {publishLoading ? (
+                    <div className="flex items-center gap-2">
+                      <motion.div
+                        className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white"
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      />
+                      Publishing…
+                    </div>
+                  ) : (
+                    'Publish winner'
+                  )}
                 </button>
               </div>
-              <p className="mt-3 text-xs text-white/40">
-                Publishing writes a row to winners and resets all founders to inactive. Magic Eden can mirror the results downstream.
-              </p>
-            </div>
-          </section>
-        </div>
+              
+              <motion.p 
+                className="mt-6 text-sm text-white/50 leading-relaxed"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.2 }}
+              >
+                <span className="font-semibold">Note:</span> Publishing writes a row to winners and resets all founders to inactive. 
+                Magic Eden can mirror the results downstream.
+              </motion.p>
+            </motion.div>
+          </motion.section>
+        </motion.div>
       )}
     </Shell>
   )

@@ -1,6 +1,19 @@
+// Visual Pass — Logic Preserved + Wallet Integration + On-chain Voting
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Shell } from '../components/Shell'
 import { supabase } from '../lib/supabase'
+import { useWalletSafe } from '../lib/wallet.tsx'
+import { WALLET_ON } from '../lib/flags'
+import { 
+  voteWithFee, 
+  recordVoteTx,
+  getConnection,
+  getProgramId,
+  getMeMintAddress,
+  getRewardsVaultAuthority
+} from '../lib/solana'
+import { PublicKey } from '@solana/web3.js'
 import type { FounderWithVotes } from '../types/supabase'
 
 type VoteStatus =
@@ -31,6 +44,10 @@ export function Vote() {
   const [status, setStatus] = useState<VoteStatus>({ state: 'idle' })
   const [pendingVotes, setPendingVotes] = useState<Record<string, boolean>>({})
   const [fingerprintHash, setFingerprintHash] = useState<string>('')
+  
+  // Wallet integration
+  const wallet = useWalletSafe()
+  const connectedWallet = wallet.publicKeyBase58
   const [votedFounderIds, setVotedFounderIds] = useState<string[]>(() => {
     if (typeof window === 'undefined') {
       return []
@@ -99,6 +116,7 @@ export function Vote() {
         ),
       )
 
+    // Optimistically update vote count
     if (!hasAlreadyVoted(founderId)) {
       setFounders((prev) =>
         prev.map((founder) =>
@@ -107,27 +125,91 @@ export function Vote() {
       )
     }
 
-    const { error } = await supabase.from('votes').insert({
-      founder_id: founderId,
-      wallet: null,
-      ip_hash: fingerprintHash || null,
-    })
+    try {
+      let txSignature: string | null = null
 
-    if (error) {
+      // If wallet is enabled and connected, use on-chain voting
+      if (WALLET_ON && wallet.connected && wallet.publicKeyBase58) {
+        try {
+          const connection = getConnection()
+          const voterPubkey = new PublicKey(wallet.publicKeyBase58)
+          
+          // Use the new voteWithFee function
+          const { txSig } = await voteWithFee({
+            connection,
+            wallet: {
+              publicKey: voterPubkey,
+              signTransaction: wallet.signTransaction?.bind(wallet) || (() => {
+                throw new Error('Wallet does not support signing')
+              })
+            },
+            programId: getProgramId(),
+            founderUuid: founderId, // Assuming founderId is a UUID
+            meMint: getMeMintAddress(),
+            rewardsOwner: getRewardsVaultAuthority()
+          })
+          
+          txSignature = txSig
+          setStatus({ state: 'success', message: `Vote transaction confirmed! Burned and transferred 0.5 $ME. Tx: ${txSignature.slice(0, 8)}...` })
+        } catch (onChainError: any) {
+          console.error('On-chain vote failed:', onChainError)
+          // Fall back to off-chain voting for this transaction
+          setStatus({ state: 'error', message: `On-chain vote failed: ${onChainError.message || 'Unknown error'}. Please try again.` })
+          if (!hasAlreadyVoted(founderId)) {
+            revert()
+          }
+          setPendingVotes((prev) => ({ ...prev, [founderId]: false }))
+          return
+        }
+      }
+
+      // Insert vote record to Supabase (with optional tx signature)
+      if (txSignature) {
+        // Use the new recordVoteTx helper
+        await recordVoteTx({
+          supabase,
+          founderId,
+          wallet: connectedWallet || undefined,
+          txSig: txSignature
+        })
+      } else {
+        // Fallback to manual insert for off-chain votes
+        const { error } = await supabase.from('votes').insert({
+          founder_id: founderId,
+          wallet: WALLET_ON ? connectedWallet : null,
+          ip_hash: fingerprintHash || null,
+          tx_sig: null
+        })
+
+        if (error) {
+          if (!hasAlreadyVoted(founderId)) {
+            revert()
+          }
+          setStatus({ state: 'error', message: `Database error: ${error.message}` })
+          setPendingVotes((prev) => ({ ...prev, [founderId]: false }))
+          return
+        }
+      }
+
+      if (!hasAlreadyVoted(founderId)) {
+        setVotedFounderIds((prev) => [...prev, founderId])
+      }
+
+      // Success message differs based on whether on-chain vote was used
+      if (!txSignature) {
+        setStatus({ state: 'success', message: 'Vote recorded. Thanks for supporting a founder.' })
+      }
+      // On-chain success message already set above
+      
+    } catch (error: any) {
+      console.error('Vote failed:', error)
       if (!hasAlreadyVoted(founderId)) {
         revert()
       }
-      setStatus({ state: 'error', message: error.message })
+      setStatus({ state: 'error', message: error.message || 'Vote failed. Please try again.' })
+    } finally {
       setPendingVotes((prev) => ({ ...prev, [founderId]: false }))
-      return
     }
-
-    if (!hasAlreadyVoted(founderId)) {
-      setVotedFounderIds((prev) => [...prev, founderId])
-    }
-
-    setStatus({ state: 'success', message: 'Vote recorded. Thanks for supporting a founder.' })
-    setPendingVotes((prev) => ({ ...prev, [founderId]: false }))
   }
 
   return (
@@ -135,73 +217,222 @@ export function Vote() {
       title="Vote on active founders"
       description="Every vote pushes founders closer to a verified badge on Magic Eden. Review the pitch, explore links, and lend your signal."
     >
-      <div className="space-y-4">
-        {status.state === 'error' ? <p className="text-sm text-egPink">{status.message}</p> : null}
-        {status.state === 'success' ? <p className="text-sm text-emerald-300">{status.message}</p> : null}
-      </div>
+      {/* $ME Banner - only show when wallet enabled */}
+      {WALLET_ON && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8 glass-panel border-egPurple/30 bg-gradient-to-r from-egPurple/10 to-egPink/10"
+        >
+          <div className="flex items-center justify-center gap-3 py-4">
+            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-egPurple to-egPink flex items-center justify-center">
+              <span className="text-white text-sm font-bold">ME</span>
+            </div>
+            <span className="text-primary font-semibold">
+              Each vote helps creators earn <span className="text-egPurple">0.5 $ME</span> on Magic Eden
+            </span>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Wallet gating - only show when wallet enabled but not connected */}
+      {WALLET_ON && !wallet.connected && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="mb-8 card-panel border-amber-500/30 bg-amber-500/5 text-center py-12"
+        >
+          <div className="space-y-4">
+            <div className="h-16 w-16 mx-auto rounded-full bg-gradient-to-br from-egPurple to-egPink flex items-center justify-center">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-primary font-semibold text-lg">Connect Your Wallet to Vote</h3>
+              <p className="text-secondary max-w-md mx-auto">
+                Connect your Magic Eden or Solana wallet to cast votes and help founders earn verification on Magic Eden.
+              </p>
+            </div>
+            <button
+              onClick={wallet.connect}
+              className="btn-primary mt-4"
+            >
+              Connect Wallet
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      <AnimatePresence>
+        {(status.state === 'error' || status.state === 'success') && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            className="mb-8"
+          >
+            {status.state === 'error' ? (
+              <div className="glass-panel border-red-500/20 bg-red-500/10">
+                <p className="text-sm font-medium text-red-300">{status.message}</p>
+              </div>
+            ) : null}
+            {status.state === 'success' ? (
+              <div className="glass-panel border-emerald-500/20 bg-emerald-500/10">
+                <p className="text-sm font-medium text-emerald-300">{status.message}</p>
+              </div>
+            ) : null}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {loading ? (
-        <div className="flex w-full items-center justify-center rounded-2xl border border-white/5 bg-white/5 py-20 text-white/60">
-          Loading active founders…
-        </div>
+        <motion.div 
+          className="glass-panel flex w-full items-center justify-center py-20"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+        >
+          <div className="flex items-center gap-3 text-secondary">
+            <motion.div
+              className="h-5 w-5 rounded-full border-2 border-white/30 border-t-accent"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            />
+            <span className="font-medium">Loading active founders…</span>
+          </div>
+        </motion.div>
       ) : sortedFounders.length === 0 ? (
-        <div className="flex w-full items-center justify-center rounded-2xl border border-dashed border-white/10 py-20 text-white/40">
-          No active founders this round.
-        </div>
+        <motion.div 
+          className="card-panel flex w-full items-center justify-center border-dashed py-20"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+        >
+          <div className="text-center space-tight">
+            <p className="text-secondary font-medium">No active founders this round.</p>
+            <p className="text-sm text-tertiary">Check back soon for new submissions.</p>
+          </div>
+        </motion.div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2">
-          {sortedFounders.map((founder) => {
+        <motion.div 
+          className="grid gap-8 lg:grid-cols-2"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2 }}
+        >
+          {sortedFounders.map((founder, index) => {
             const alreadyVoted = hasAlreadyVoted(founder.id)
+            const isPending = pendingVotes[founder.id]
+            
             return (
-              <article
+              <motion.article
                 key={founder.id}
-                className="flex h-full flex-col justify-between rounded-2xl border border-white/5 bg-white/5 p-6 shadow-lg shadow-black/20"
+                className="group card-panel space-content flex h-full flex-col justify-between hover:border-white/[0.15] hover:bg-white/[0.08]"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.05 * index, duration: 0.3 }}
+                whileHover={{ y: -2, scale: 1.01 }}
               >
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-xl font-semibold text-white">{founder.name}</h2>
-                      {founder.handle ? <p className="text-sm text-white/60">{founder.handle}</p> : null}
+                <div className="space-content">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <motion.h2 
+                        className="text-2xl font-bold text-primary mb-2 leading-tight"
+                        layoutId={`title-${founder.id}`}
+                      >
+                        {founder.name}
+                      </motion.h2>
+                      {founder.handle ? (
+                        <p className="text-base text-tertiary font-medium">{founder.handle}</p>
+                      ) : null}
                     </div>
-                    <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/60">
-                      {founder.vote_count} votes
-                    </span>
+                    <div className="flex items-center gap-2 rounded-full border border-white/[0.15] bg-white/[0.05] px-4 py-2 backdrop-blur-sm transition-transform duration-200 hover:scale-105">
+                      <div className="h-2 w-2 rounded-full bg-eg-gradient" />
+                      <span className="text-sm font-semibold text-primary">
+                        {founder.vote_count} {founder.vote_count === 1 ? 'vote' : 'votes'}
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-sm leading-relaxed text-white/70">{founder.description}</p>
-                  <div className="flex flex-wrap gap-3 text-sm">
-                    {founder.site_link ? (
-                      <a
-                        href={founder.site_link}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1 text-white/80 transition hover:text-white"
-                      >
-                        Site ↗
-                      </a>
-                    ) : null}
-                    {founder.video_url ? (
-                      <a
-                        href={founder.video_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1 text-white/80 transition hover:text-white"
-                      >
-                        Pitch video ↗
-                      </a>
-                    ) : null}
-                  </div>
+                  
+                  <p className="text-base leading-relaxed text-secondary line-clamp-4">
+                    {founder.description}
+                  </p>
+                  
+                  {(founder.site_link || founder.video_url) && (
+                    <div className="flex flex-wrap gap-3">
+                      {founder.site_link ? (
+                        <a
+                          href={founder.site_link}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn-secondary text-sm"
+                        >
+                          <span>Website</span>
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      ) : null}
+                      {founder.video_url ? (
+                        <a
+                          href={founder.video_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn-secondary text-sm"
+                        >
+                          <span>Pitch Video</span>
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h8M7 7h10a2 2 0 012 2v6a2 2 0 01-2 2H7a2 2 0 01-2 2V9a2 2 0 012-2z" />
+                          </svg>
+                        </a>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
-                <button
+                
+                <motion.button
                   type="button"
                   onClick={() => handleVote(founder.id)}
-                  disabled={pendingVotes[founder.id] || alreadyVoted}
-                  className="mt-8 inline-flex w-full items-center justify-center rounded-full bg-eg-gradient px-5 py-3 text-sm font-semibold text-white shadow-glow transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isPending || alreadyVoted}
+                  className={`mt-8 inline-flex w-full items-center justify-center gap-3 rounded-2xl px-6 py-4 text-base font-semibold transition-all duration-300 ${
+                    alreadyVoted
+                      ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 cursor-default'
+                      : isPending
+                      ? 'bg-white/10 border border-white/20 text-white/60 cursor-wait'
+                      : 'btn-primary'
+                  }`}
+                  whileHover={!alreadyVoted && !isPending ? { scale: 1.01 } : {}}
+                  whileTap={!alreadyVoted && !isPending ? { scale: 0.99 } : {}}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
                 >
-                  {alreadyVoted ? 'Vote submitted' : pendingVotes[founder.id] ? 'Submitting…' : 'Vote'}
-                </button>
-              </article>
+                  {alreadyVoted ? (
+                    <>
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Vote submitted
+                    </>
+                  ) : isPending ? (
+                    <>
+                      <motion.div
+                        className="h-5 w-5 rounded-full border-2 border-white/30 border-t-white"
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      />
+                      Submitting…
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                      </svg>
+                      Vote for {founder.name}
+                    </>
+                  )}
+                </motion.button>
+              </motion.article>
             )
           })}
-        </div>
+        </motion.div>
       )}
     </Shell>
   )
