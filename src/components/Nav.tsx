@@ -2,6 +2,7 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { WalletBar } from './WalletBar'
+import { WALLET_ON } from '../lib/flags'
 
 const links = [
   { to: '/', label: 'Home' },
@@ -82,7 +83,7 @@ export function Nav() {
             })}
           </nav>
           
-          <WalletBar />
+          {WALLET_ON ? <WalletBar /> : null}
         </div>
 
         {/* Mobile menu - simplified for now */}

@@ -12,7 +12,7 @@ import { NotFound } from './pages/NotFound'
 import { Submit } from './pages/Submit'
 import { Vote } from './pages/Vote'
 import { Winners } from './pages/Winners'
-import { WalletContextProvider } from './lib/wallet.tsx'
+import { WalletContextProvider } from './lib/wallet'
 
 const router = createBrowserRouter([
   {
