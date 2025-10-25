@@ -1,0 +1,45 @@
+/Users/michaelharris/Documents/GitHub/edens-gates/EG/src/lib/solana.ts:31:13: Unexpected any. Specify a different type. [Error/@typescript-eslint/no-explicit-any]
+/Users/michaelharris/Documents/GitHub/edens-gates/EG/src/lib/uploads.ts:42:51: '_founderId' is defined but never used. [Error/@typescript-eslint/no-unused-vars]
+/Users/michaelharris/Documents/GitHub/edens-gates/EG/src/lib/uploads.ts:80:46: '_founderId' is defined but never used. [Error/@typescript-eslint/no-unused-vars]
+/Users/michaelharris/Documents/GitHub/edens-gates/EG/src/lib/wallet.ts:72:23: Unexpected any. Specify a different type. [Error/@typescript-eslint/no-explicit-any]
+/Users/michaelharris/Documents/GitHub/edens-gates/EG/src/lib/wallet.ts:77:25: Unexpected any. Specify a different type. [Error/@typescript-eslint/no-explicit-any]
+/Users/michaelharris/Documents/GitHub/edens-gates/EG/src/lib/wallet.ts:194:45: Unexpected any. Specify a different type. [Error/@typescript-eslint/no-explicit-any]
+/Users/michaelharris/Documents/GitHub/edens-gates/EG/src/lib/wallet.ts:198:43: Unexpected any. Specify a different type. [Error/@typescript-eslint/no-explicit-any]
+/Users/michaelharris/Documents/GitHub/edens-gates/EG/src/lib/wallet.ts:210:29: Unexpected any. Specify a different type. [Error/@typescript-eslint/no-explicit-any]
+/Users/michaelharris/Documents/GitHub/edens-gates/EG/src/lib/wallet.ts:210:72: Unexpected any. Specify a different type. [Error/@typescript-eslint/no-explicit-any]
+/Users/michaelharris/Documents/GitHub/edens-gates/EG/src/lib/wallet.ts:231:31: Unexpected any. Specify a different type. [Error/@typescript-eslint/no-explicit-any]
+/Users/michaelharris/Documents/GitHub/edens-gates/EG/src/lib/wallet.ts:231:73: Unexpected any. Specify a different type. [Error/@typescript-eslint/no-explicit-any]
+/Users/michaelharris/Documents/GitHub/edens-gates/EG/src/pages/Vote.tsx:154:32: Unexpected any. Specify a different type. [Error/@typescript-eslint/no-explicit-any]
+/Users/michaelharris/Documents/GitHub/edens-gates/EG/src/pages/Vote.tsx:204:21: Unexpected any. Specify a different type. [Error/@typescript-eslint/no-explicit-any]
+
+13 problems
+
+> edensgates@0.0.0 build
+> tsc -b && vite build
+
+vite v7.1.10 building for production...
+transforming...
+✓ 5669 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.99 kB │ gzip:   0.55 kB
+dist/assets/index-Bw8NBpOa.css   36.06 kB │ gzip:   6.59 kB
+dist/assets/index-DGv8cegU.js    12.93 kB │ gzip:   3.78 kB
+dist/assets/index-Bka-M1yz.js    29.60 kB │ gzip:   6.14 kB
+dist/assets/index-PlJ2bk34.js   987.44 kB │ gzip: 298.46 kB
+✓ built in 5.50s
+
+> edensgates@0.0.0 build
+> tsc -b && vite build
+
+vite v7.1.10 building for production...
+transforming...
+✓ 5669 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.99 kB │ gzip:   0.55 kB
+dist/assets/index-Bw8NBpOa.css   36.06 kB │ gzip:   6.59 kB
+dist/assets/index-DGv8cegU.js    12.93 kB │ gzip:   3.78 kB
+dist/assets/index-Bka-M1yz.js    29.60 kB │ gzip:   6.14 kB
+dist/assets/index-PlJ2bk34.js   987.44 kB │ gzip: 298.46 kB
+✓ built in 5.34s

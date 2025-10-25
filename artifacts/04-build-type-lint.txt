@@ -1,3 +1,48 @@
-=== Section 4: Build / Type / Lint ===
+.env
+.env.example
+.env.local
+--- .env ---
+# Edens Gates Environment Variables
+# Enable wallet integration features
+VITE_WALLET_ENABLED=true
 
-# Clean cache (best effort)
+# Required for On-chain Voting (when VITE_WALLET_ENABLED=true)
+VITE_ME_MINT=MEFNBXixkEbait3xn9bkm8WsJzXtVsaJEn4c8Sam21u
+VITE_REWARDS_VAULT=8rjP7XVxt1eVioDJoLSMMBnse1QAo9SCkoYmVN3t8KAE
+VITE_ME_DECIMALS=6
+VITE_CLUSTER=devnet
+
+# Optional: Enable other features when ready
+# VITE_UPLOADS_ENABLED=true
+# VITE_USE_EDGE_FUNCTIONS=true--- .env.local ---
+# Replace these with your actual Supabase values
+# You can find them in your Supabase project dashboard -> Settings -> API
+VITE_SUPABASE_URL=https://dhecyrkdyhjnjvbcbbbe.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRoZWN5cmtkeWhqbmp2YmNiYmJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA1MzE5NDIsImV4cCI6MjA3NjEwNzk0Mn0.i3MFsuIJVxlzjFBIZSiMCIU_Zsy15kRtji2numwBVKk
+VITE_ME_DECIMALS=6--- .env.example ---
+# Supabase Configuration (Required)
+# Get these values from your Supabase project dashboard
+# https://app.supabase.com/project/YOUR_PROJECT_ID/settings/api
+
+VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# Feature Flags (Optional - Default: false)
+# Wallet Integration: Enable Solana wallet connection for votes
+VITE_WALLET_ENABLED=true
+
+# Edge Functions: Use secure server-side functions for admin operations
+VITE_USE_EDGE_FUNCTIONS=false
+
+# Media Uploads: Enable image and PDF uploads via Supabase Storage
+VITE_UPLOADS_ENABLED=false
+
+# On-Chain Voting Configuration (Required when VITE_WALLET_ENABLED=true)
+# Magic Eden $ME token mint address
+VITE_ME_MINT=MEFNBXixkEbait3xn9bkm8WsJzXtVsaJEn4c8Sam21u
+
+# Edens Gates rewards wallet pubkey
+VITE_REWARDS_VAULT=8rjP7XVxt1eVioDJoLSMMBnse1QAo9SCkoYmVN3t8KAE
+
+# Solana cluster (devnet for testing, mainnet-beta for production)
+VITE_CLUSTER=devnet
