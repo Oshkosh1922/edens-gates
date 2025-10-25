@@ -1,3 +1,11 @@
+import { Buffer } from 'buffer'
+if (!(window as any).Buffer) {
+  ;(window as any).Buffer = Buffer
+}
+if (!(globalThis as any).Buffer) {
+  ;(globalThis as any).Buffer = Buffer
+}
+
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
