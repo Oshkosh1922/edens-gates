@@ -9,7 +9,6 @@ import {
   voteWithFee, 
   recordVoteTx,
   getConnection,
-  getProgramId,
   getMeMintAddress,
   getRewardsVaultAuthority
 } from '../lib/solana'
@@ -143,18 +142,17 @@ export function Vote() {
                 throw new Error('Wallet does not support signing')
               })
             },
-            programId: getProgramId(),
-            founderUuid: founderId, // Assuming founderId is a UUID
             meMint: getMeMintAddress(),
             rewardsOwner: getRewardsVaultAuthority()
           })
           
           txSignature = txSig
-          setStatus({ state: 'success', message: `Vote transaction confirmed! Burned and transferred 0.5 $ME. Tx: ${txSignature.slice(0, 8)}...` })
-        } catch (onChainError: any) {
+          setStatus({ state: 'success', message: `Vote transaction confirmed! Transferred 0.5 $ME. Tx: ${txSignature.slice(0, 8)}...` })
+        } catch (onChainError: unknown) {
           console.error('On-chain vote failed:', onChainError)
+          const message = onChainError instanceof Error ? onChainError.message : 'Unknown error'
           // Fall back to off-chain voting for this transaction
-          setStatus({ state: 'error', message: `On-chain vote failed: ${onChainError.message || 'Unknown error'}. Please try again.` })
+          setStatus({ state: 'error', message: `On-chain vote failed: ${message}. Please try again.` })
           if (!hasAlreadyVoted(founderId)) {
             revert()
           }
@@ -201,12 +199,13 @@ export function Vote() {
       }
       // On-chain success message already set above
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Vote failed:', error)
+      const message = error instanceof Error ? error.message : 'Vote failed. Please try again.'
       if (!hasAlreadyVoted(founderId)) {
         revert()
       }
-      setStatus({ state: 'error', message: error.message || 'Vote failed. Please try again.' })
+      setStatus({ state: 'error', message })
     } finally {
       setPendingVotes((prev) => ({ ...prev, [founderId]: false }))
     }
