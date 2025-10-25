@@ -64,17 +64,84 @@ const BACKPACK_NAME = 'Backpack (Injected)' as WalletName<'Backpack (Injected)'>
 const FALLBACK_ICON =
   'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxNiIgY3k9IjE2IiByPSIxNiIgZmlsbD0iI2Y1NTZmZiIvPjwvc3ZnPg=='
 
+type ProviderPublicKey = PublicKey | { toString(): string } | string
+
+type WalletAdapterCtor = new (...args: never[]) => WalletAdapter
+
+type InjectedProvider = {
+  publicKey?: ProviderPublicKey
+  connect?: () => Promise<{ publicKey?: ProviderPublicKey } | void>
+  disconnect?: () => Promise<void>
+  signTransaction?: (transaction: Transaction) => Promise<Transaction>
+  signAllTransactions?: (transactions: Transaction[]) => Promise<Transaction[]>
+  sendTransaction?: (
+    transaction: Transaction,
+    connection: Connection,
+    options?: SendTransactionOptions,
+  ) => Promise<string>
+  signAndSendTransaction?: (
+    transaction: Transaction,
+    connection: Connection,
+    options?: SendTransactionOptions,
+  ) => Promise<{ signature?: string } | string>
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null
+}
+
+const isInjectedProvider = (value: unknown): value is InjectedProvider => {
+  if (!isRecord(value)) {
+    return false
+  }
+  const descriptor = value as Record<string, unknown>
+  return (
+    'publicKey' in descriptor ||
+    'connect' in descriptor ||
+    'signTransaction' in descriptor ||
+    'sendTransaction' in descriptor
+  )
+}
+
+const coercePublicKey = (key: ProviderPublicKey | undefined): PublicKey | null => {
+  if (!key) {
+    return null
+  }
+  if (key instanceof PublicKey) {
+    return key
+  }
+  const asString = typeof key === 'string' ? key : key.toString()
+  try {
+    return new PublicKey(asString)
+  } catch {
+    return null
+  }
+}
+
+const extractWalletAdapterCtor = (module: unknown, ...exportKeys: string[]): WalletAdapterCtor | null => {
+  if (!isRecord(module)) {
+    return null
+  }
+  for (const exportKey of exportKeys) {
+    const candidate = module[exportKey]
+    if (typeof candidate === 'function') {
+      return candidate as WalletAdapterCtor
+    }
+  }
+  return null
+}
+
 abstract class BaseInjectedAdapter extends BaseWalletAdapter {
   abstract readonly adapterName: WalletName<string>
   abstract readonly adapterUrl: string
   abstract readonly adapterIcon: string
 
-  protected provider: any
+  protected provider: InjectedProvider | null
   protected cachedKey: PublicKey | null = null
   protected connectingState = false
   readonly supportedTransactionVersions = null
 
-  constructor(provider: any) {
+  constructor(provider: InjectedProvider | null) {
     super()
     this.provider = provider
   }
@@ -92,8 +159,13 @@ abstract class BaseInjectedAdapter extends BaseWalletAdapter {
   }
 
   get publicKey(): PublicKey | null {
-    const key = this.provider?.publicKey ?? this.cachedKey
-    return key ? new PublicKey(key.toString()) : null
+    if (this.provider?.publicKey) {
+      const resolved = coercePublicKey(this.provider.publicKey)
+      if (resolved) {
+        return resolved
+      }
+    }
+    return this.cachedKey
   }
 
   get readyState(): WalletReadyState {
@@ -117,8 +189,9 @@ abstract class BaseInjectedAdapter extends BaseWalletAdapter {
 
     try {
       const result = await this.provider.connect?.()
-      const key = this.provider.publicKey ?? result?.publicKey
-      this.cachedKey = key ? new PublicKey(key.toString()) : this.cachedKey
+      const keyCandidate = this.provider.publicKey ?? result?.publicKey
+      const resolvedKey = coercePublicKey(keyCandidate)
+      this.cachedKey = resolvedKey ?? this.cachedKey
       const publicKey = this.publicKey
       if (!publicKey) {
         throw new WalletNotReadyError(`${this.adapterName} wallet did not provide a public key`)
@@ -163,7 +236,11 @@ abstract class BaseInjectedAdapter extends BaseWalletAdapter {
     }
     if (this.provider?.signAndSendTransaction) {
       const result = await this.provider.signAndSendTransaction(transaction, connection, options)
-      return typeof result === 'string' ? result : result?.signature
+      const signature = typeof result === 'string' ? result : result?.signature
+      if (!signature) {
+        throw new WalletNotReadyError(`${this.adapterName} wallet did not return a transaction signature`)
+      }
+      return signature
     }
     const signed = await this.signTransaction(transaction)
     return connection.sendRawTransaction(signed.serialize(), options)
@@ -191,14 +268,15 @@ const dynamicImport: DynamicImporter = ((specifier: string) => {
   return importer(specifier)
 })
 
-const getWindowProvider = (keys: string[]): any => {
+const getWindowProvider = (keys: string[]): InjectedProvider | null => {
   if (typeof window === 'undefined') {
     return null
   }
-  const scoped = window as Record<string, any>
+  const scopedWindow = window as typeof window & Record<string, unknown>
   for (const key of keys) {
-    if (scoped[key]) {
-      return scoped[key]
+    const candidate = scopedWindow[key]
+    if (candidate && isInjectedProvider(candidate)) {
+      return candidate
     }
   }
   return null
@@ -206,9 +284,9 @@ const getWindowProvider = (keys: string[]): any => {
 
 const loadMagicEdenAdapter = async (): Promise<WalletAdapter | null> => {
   try {
-    const module = await dynamicImport('@magiceden-oss/wallet-adapter')
-    const ctor = (module as any)?.MagicEdenWalletAdapter ?? (module as any)?.default
-    if (typeof ctor === 'function') {
+    const module = await dynamicImport<unknown>('@magiceden-oss/wallet-adapter')
+    const ctor = extractWalletAdapterCtor(module, 'MagicEdenWalletAdapter', 'default')
+    if (ctor) {
       return new ctor()
     }
   } catch {
@@ -227,9 +305,9 @@ const loadBackpackAdapter = async (): Promise<WalletAdapter | null> => {
 
   for (const specifier of candidateModules) {
     try {
-      const module = await dynamicImport(specifier)
-      const ctor = (module as any)?.BackpackWalletAdapter ?? (module as any)?.default
-      if (typeof ctor === 'function') {
+      const module = await dynamicImport<unknown>(specifier)
+      const ctor = extractWalletAdapterCtor(module, 'BackpackWalletAdapter', 'default')
+      if (ctor) {
         return new ctor()
       }
     } catch {
