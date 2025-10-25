@@ -1,16 +1,19 @@
 // Visual Pass — Logic Preserved + Wallet Integration + On-chain Voting
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Connection, PublicKey, Transaction } from '@solana/web3.js'
-import {
-  createAssociatedTokenAccountInstruction,
-  createTransferCheckedInstruction,
-  getAssociatedTokenAddress,
-} from '@solana/spl-token'
 import { Shell } from '../components/Shell'
 import { supabase } from '../lib/supabase'
 import { useWalletSafe } from '../lib/wallet'
-import { WALLET_ON, ME_MINT, ME_DECIMALS, REWARDS_WALLET, SOLANA_RPC } from '../lib/flags'
+import { WALLET_ON } from '../lib/flags'
+import { 
+  voteWithFee, 
+  recordVoteTx,
+  getConnection,
+  getProgramId,
+  getMeMintAddress,
+  getRewardsVaultAuthority
+} from '../lib/solana'
+import { PublicKey } from '@solana/web3.js'
 import type { FounderWithVotes } from '../types/supabase'
 
 type VoteStatus =
@@ -125,85 +128,67 @@ export function Vote() {
     try {
       let txSignature: string | null = null
 
+      // If wallet is enabled and connected, use on-chain voting
       if (WALLET_ON && wallet.connected && wallet.publicKeyBase58) {
         try {
-          if (!ME_MINT || !REWARDS_WALLET) {
-            throw new Error('Wallet voting requires VITE_ME_MINT and VITE_REWARDS_WALLET.')
-          }
-
-          const decimals = Number.isFinite(ME_DECIMALS) ? Math.max(0, Math.floor(ME_DECIMALS)) : 6
-          const mint = new PublicKey(ME_MINT)
-          const rewardsOwner = new PublicKey(REWARDS_WALLET)
-          const voter = new PublicKey(wallet.publicKeyBase58)
-          const connection = new Connection(SOLANA_RPC, 'confirmed')
-
-          const amountBaseUnits = BigInt(Math.round(0.5 * Math.pow(10, decimals)))
-          if (amountBaseUnits <= 0n) {
-            throw new Error('Unable to derive a token amount for 0.5 $ME with current ME_DECIMALS value.')
-          }
-
-          const voterAta = await getAssociatedTokenAddress(mint, voter)
-          const rewardsAta = await getAssociatedTokenAddress(mint, rewardsOwner)
-
-          const instructions = []
-
-          const voterAccount = await connection.getAccountInfo(voterAta)
-          if (!voterAccount) {
-            instructions.push(createAssociatedTokenAccountInstruction(voter, voterAta, voter, mint))
-          }
-
-          const rewardsAccount = await connection.getAccountInfo(rewardsAta)
-          if (!rewardsAccount) {
-            instructions.push(createAssociatedTokenAccountInstruction(voter, rewardsAta, rewardsOwner, mint))
-          }
-
-          instructions.push(
-            createTransferCheckedInstruction(
-              voterAta,
-              mint,
-              rewardsAta,
-              voter,
-              amountBaseUnits,
-              decimals,
-            ),
-          )
-
-          const transaction = new Transaction()
-          transaction.add(...instructions)
-
-          txSignature = await wallet.signAndSend(transaction)
-          setStatus({
-            state: 'success',
-            message: `Vote sent on-chain. Tx: ${txSignature.slice(0, 8)}…${txSignature.slice(-8)}`,
+          const connection = getConnection()
+          const voterPubkey = new PublicKey(wallet.publicKeyBase58)
+          
+          // Use the new voteWithFee function
+          const { txSig } = await voteWithFee({
+            connection,
+            wallet: {
+              publicKey: voterPubkey,
+              signTransaction: wallet.signTransaction?.bind(wallet) || (() => {
+                throw new Error('Wallet does not support signing')
+              })
+            },
+            programId: getProgramId(),
+            founderUuid: founderId, // Assuming founderId is a UUID
+            meMint: getMeMintAddress(),
+            rewardsOwner: getRewardsVaultAuthority()
           })
+          
+          txSignature = txSig
+          setStatus({ state: 'success', message: `Vote transaction confirmed! Burned and transferred 0.5 $ME. Tx: ${txSignature.slice(0, 8)}...` })
         } catch (onChainError: any) {
-          console.error('Token transfer failed:', onChainError)
+          console.error('On-chain vote failed:', onChainError)
+          // Fall back to off-chain voting for this transaction
+          setStatus({ state: 'error', message: `On-chain vote failed: ${onChainError.message || 'Unknown error'}. Please try again.` })
           if (!hasAlreadyVoted(founderId)) {
             revert()
           }
-          setStatus({
-            state: 'error',
-            message: onChainError instanceof Error ? onChainError.message : 'Unable to send token transfer.',
-          })
           setPendingVotes((prev) => ({ ...prev, [founderId]: false }))
           return
         }
       }
 
-      const { error } = await supabase.from('votes').insert({
-        founder_id: founderId,
-        wallet: WALLET_ON ? connectedWallet : null,
-        ip_hash: fingerprintHash || null,
-        tx_sig: txSignature,
-      })
+      // Insert vote record to Supabase (with optional tx signature)
+      if (txSignature) {
+        // Use the new recordVoteTx helper
+        await recordVoteTx({
+          supabase,
+          founderId,
+          wallet: connectedWallet || undefined,
+          txSig: txSignature
+        })
+      } else {
+        // Fallback to manual insert for off-chain votes
+        const { error } = await supabase.from('votes').insert({
+          founder_id: founderId,
+          wallet: WALLET_ON ? connectedWallet : null,
+          ip_hash: fingerprintHash || null,
+          tx_sig: null
+        })
 
-      if (error) {
-        if (!hasAlreadyVoted(founderId)) {
-          revert()
+        if (error) {
+          if (!hasAlreadyVoted(founderId)) {
+            revert()
+          }
+          setStatus({ state: 'error', message: `Database error: ${error.message}` })
+          setPendingVotes((prev) => ({ ...prev, [founderId]: false }))
+          return
         }
-        setStatus({ state: 'error', message: `Database error: ${error.message}` })
-        setPendingVotes((prev) => ({ ...prev, [founderId]: false }))
-        return
       }
 
       if (!hasAlreadyVoted(founderId)) {
@@ -215,6 +200,7 @@ export function Vote() {
         setStatus({ state: 'success', message: 'Vote recorded. Thanks for supporting a founder.' })
       }
       // On-chain success message already set above
+      
     } catch (error: any) {
       console.error('Vote failed:', error)
       if (!hasAlreadyVoted(founderId)) {
@@ -242,8 +228,8 @@ export function Vote() {
             <div className="h-8 w-8 rounded-full bg-gradient-to-br from-egPurple to-egPink flex items-center justify-center">
               <span className="text-white text-sm font-bold">ME</span>
             </div>
-            <span className="text-primary text-sm font-semibold sm:text-base">
-              Voting costs 0.5 $ME (devnet). On-chain deduction &amp; burn finalization are coming.
+            <span className="text-primary font-semibold">
+              Each vote helps creators earn <span className="text-egPurple">0.5 $ME</span> on Magic Eden
             </span>
           </div>
         </motion.div>
@@ -336,7 +322,6 @@ export function Vote() {
           {sortedFounders.map((founder, index) => {
             const alreadyVoted = hasAlreadyVoted(founder.id)
             const isPending = pendingVotes[founder.id]
-            const walletRequired = WALLET_ON && !wallet.connected
             
             return (
               <motion.article
@@ -407,14 +392,12 @@ export function Vote() {
                 <motion.button
                   type="button"
                   onClick={() => handleVote(founder.id)}
-                  disabled={isPending || alreadyVoted || walletRequired}
+                  disabled={isPending || alreadyVoted}
                   className={`mt-8 inline-flex w-full items-center justify-center gap-3 rounded-2xl px-6 py-4 text-base font-semibold transition-all duration-300 ${
                     alreadyVoted
                       ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 cursor-default'
                       : isPending
                       ? 'bg-white/10 border border-white/20 text-white/60 cursor-wait'
-                      : walletRequired
-                      ? 'bg-white/5 border border-white/15 text-white/60 cursor-not-allowed'
                       : 'btn-primary'
                   }`}
                   whileHover={!alreadyVoted && !isPending ? { scale: 1.01 } : {}}
@@ -436,13 +419,6 @@ export function Vote() {
                         transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                       />
                       Submitting…
-                    </>
-                  ) : walletRequired ? (
-                    <>
-                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c1.656 0 3-1.567 3-3.5S13.656 4 12 4 9 5.567 9 7.5 10.344 11 12 11zm0 2c-2.761 0-5 2.015-5 4.5V19a1 1 0 001 1h8a1 1 0 001-1v-1.5c0-2.485-2.239-4.5-5-4.5z" />
-                      </svg>
-                      Connect wallet to vote
                     </>
                   ) : (
                     <>

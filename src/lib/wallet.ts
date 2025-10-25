@@ -33,6 +33,8 @@ interface WalletSafe {
   publicKeyBase58?: string
   connect: () => Promise<void>
   disconnect: () => Promise<void>
+  signTransaction: (transaction: Transaction) => Promise<Transaction>
+  signAllTransactions?: (txs: Transaction[]) => Promise<Transaction[]>
   signAndSend: (transaction: Transaction) => Promise<string>
 }
 
@@ -44,6 +46,9 @@ const disabledWallet: WalletSafe = {
   },
   async disconnect() {
     return
+  },
+  async signTransaction() {
+    throw new Error('Wallet support is disabled. Enable VITE_WALLET_ENABLED to sign transactions.')
   },
   async signAndSend() {
     throw new Error('Wallet support is disabled. Enable VITE_WALLET_ENABLED to sign transactions.')
@@ -254,6 +259,15 @@ const WalletBridge = ({ children }: { children: ReactNode }) => {
       disconnect: async () => {
         await wallet.disconnect()
       },
+      signTransaction: async (tx: Transaction) => {
+        if (!wallet.signTransaction) {
+          throw new Error('Wallet does not support signTransaction')
+        }
+        return wallet.signTransaction(tx)
+      },
+      signAllTransactions: wallet.signAllTransactions
+        ? async (txs: Transaction[]) => wallet.signAllTransactions!(txs)
+        : undefined,
       signAndSend: async (transaction: Transaction) => {
         if (!wallet.publicKey) {
           throw new Error('Connect a wallet before sending transactions')

@@ -1,126 +1,45 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useWallet } from '@solana/wallet-adapter-react'
+import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { WALLET_ON } from '../lib/flags'
-import { useWalletSafe } from '../lib/wallet'
-
-const truncateKey = (value: string) => `${value.slice(0, 4)}…${value.slice(-4)}`
 
 export const WalletBar = () => {
-  if (!WALLET_ON) {
-    return null
+  // Call hooks unconditionally (Rule of Hooks)
+  const { connected, publicKey, disconnect } = useWallet()
+  const { setVisible } = useWalletModal()
+  
+  // Don't render if wallet disabled
+  if (!WALLET_ON) return null
+  
+  const handleConnect = () => {
+    setVisible(true)
   }
-
-  const wallet = useWalletSafe()
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!menuOpen) {
-      return
-    }
-
-    const handleClick = (event: MouseEvent) => {
-      if (!menuRef.current) {
-        return
-      }
-      if (!menuRef.current.contains(event.target as Node)) {
-        setMenuOpen(false)
-      }
-    }
-
-    document.addEventListener('click', handleClick)
-    return () => document.removeEventListener('click', handleClick)
-  }, [menuOpen])
-
-  const label = useMemo(() => {
-    if (!wallet.publicKeyBase58) {
-      return ''
-    }
-    return truncateKey(wallet.publicKeyBase58)
-  }, [wallet.publicKeyBase58])
-
-  const handleCopy = async () => {
-    if (!wallet.publicKeyBase58) {
-      return
-    }
-    try {
-      await navigator.clipboard?.writeText(wallet.publicKeyBase58)
-    } catch (error) {
-      console.warn('Clipboard copy failed', error)
-    }
-    setMenuOpen(false)
-  }
-
-  const handleDisconnect = async () => {
-    setBusy(true)
-    try {
-      await wallet.disconnect()
-    } finally {
-      setBusy(false)
-      setMenuOpen(false)
-    }
-  }
-
-  const handleConnect = async () => {
-    setBusy(true)
-    try {
-      await wallet.connect()
-    } finally {
-      setBusy(false)
-    }
-  }
-
+  
   return (
-    <div className="relative flex items-center">
-      {!wallet.connected ? (
-        <button
-          type="button"
-          onClick={handleConnect}
-          disabled={busy}
-          className="px-4 py-2 rounded-lg bg-gradient-to-r from-egPurple to-egPink text-sm font-semibold text-white transition-all duration-200 hover:shadow-lg hover:shadow-egPurple/25 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {busy ? 'Connecting…' : 'Connect Wallet'}
-        </button>
-      ) : (
-        <div ref={menuRef} className="relative">
+    <div className="flex items-center gap-3">
+      {connected ? (
+        <div className="flex items-center gap-2">
+          {/* Connected wallet display */}
+          <div className="px-3 py-1.5 bg-egPurple/20 border border-egPurple/30 rounded-lg">
+            <span className="text-xs text-egPurple font-mono">
+              {publicKey?.toString().slice(0, 4)}...{publicKey?.toString().slice(-4)}
+            </span>
+          </div>
+          
+          {/* Disconnect button */}
           <button
-            type="button"
-            onClick={() => setMenuOpen((value) => !value)}
-            className="flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm font-semibold text-white/90 transition-colors hover:bg-white/10"
+            onClick={disconnect}
+            className="px-3 py-1.5 text-xs text-white/70 hover:text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg transition-all duration-200"
           >
-            <span className="inline-flex h-2 w-2 rounded-full bg-emerald-400" aria-hidden />
-            <span className="font-mono text-xs">{label}</span>
-            <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M3 4.5L6 7.5L9 4.5"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            Disconnect
           </button>
-
-          {menuOpen ? (
-            <div className="absolute right-0 mt-2 w-40 rounded-xl border border-white/10 bg-egDark/90 p-2 shadow-xl backdrop-blur-xl">
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-secondary transition-colors hover:bg-white/10 hover:text-white"
-              >
-                Copy address
-              </button>
-              <button
-                type="button"
-                onClick={handleDisconnect}
-                disabled={busy}
-                className="mt-1 block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-red-300 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {busy ? 'Disconnecting…' : 'Disconnect'}
-              </button>
-            </div>
-          ) : null}
         </div>
+      ) : (
+        <button
+          onClick={handleConnect}
+          className="px-4 py-2 bg-gradient-to-r from-egPurple to-egPink text-white text-sm font-semibold rounded-lg hover:shadow-lg hover:shadow-egPurple/25 transition-all duration-200"
+        >
+          Connect Wallet
+        </button>
       )}
     </div>
   )
