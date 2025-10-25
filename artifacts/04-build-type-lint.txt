@@ -1,0 +1,3 @@
+=== Section 4: Build / Type / Lint ===
+
+# Clean cache (best effort)
