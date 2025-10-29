@@ -40,7 +40,6 @@ const generateFileName = (originalName: string, prefix: string): string => {
 
 // Upload image thumbnail
 export const uploadThumbnail = async (file: File, _founderId?: string): Promise<UploadResult> => {
-  void _founderId
   if (!UPLOADS_ENABLED) {
     return { success: false, error: 'Uploads not enabled' }
   }
@@ -79,7 +78,6 @@ export const uploadThumbnail = async (file: File, _founderId?: string): Promise<
 
 // Upload PDF deck
 export const uploadDeck = async (file: File, _founderId?: string): Promise<UploadResult> => {
-  void _founderId
   if (!UPLOADS_ENABLED) {
     return { success: false, error: 'Uploads not enabled' }
   }

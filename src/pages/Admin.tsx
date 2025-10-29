@@ -1,5 +1,5 @@
 // Visual Pass — Logic Preserved
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Shell } from '../components/Shell'
 import {
@@ -16,7 +16,21 @@ type MessageState = {
   text: string
 }
 
-type PendingActionState = Record<string, boolean>
+type FounderAction = 'approve' | 'reject' | 'toggle' | null
+type PendingActionState = Record<string, FounderAction | undefined>
+
+const ButtonSpinner = () => (
+  <motion.span
+    className="inline-flex h-4 w-4 items-center justify-center"
+    aria-hidden="true"
+  >
+    <motion.span
+      className="h-full w-full rounded-full border-2 border-current border-b-transparent"
+      animate={{ rotate: 360 }}
+      transition={{ duration: 0.75, repeat: Infinity, ease: 'linear' }}
+    />
+  </motion.span>
+)
 
 export function Admin() {
   const [pendingFounders, setPendingFounders] = useState<Founder[]>([])
@@ -28,7 +42,27 @@ export function Admin() {
   const [selectedWinnerId, setSelectedWinnerId] = useState('')
   const [weekNumber, setWeekNumber] = useState('')
 
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const showClientModeBanner = !EDGE_FUNCTIONS_ENABLED
+
+  const showToast = useCallback((toast: MessageState) => {
+    setMessage(toast)
+    if (toastTimer.current) {
+      clearTimeout(toastTimer.current)
+    }
+    toastTimer.current = setTimeout(() => {
+      setMessage(null)
+    }, 4000)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current) {
+        clearTimeout(toastTimer.current)
+      }
+    }
+  }, [])
 
   const loadFounders = useCallback(async () => {
     setLoading(true)
@@ -40,7 +74,7 @@ export function Admin() {
       .order('created_at', { ascending: false })
 
     if (error) {
-      setMessage({ kind: 'error', text: error.message })
+      showToast({ kind: 'error', text: error.message })
       setLoading(false)
       return
     }
@@ -55,25 +89,33 @@ export function Admin() {
     loadFounders()
   }, [loadFounders])
 
-  const setActionPending = (id: string, pending: boolean) => {
-    setActionState((prev) => ({ ...prev, [id]: pending }))
+  const setActionPending = (id: string, action: FounderAction) => {
+    setActionState((prev) => {
+      const next = { ...prev }
+      if (action) {
+        next[id] = action
+      } else {
+        delete next[id]
+      }
+      return next
+    })
   }
 
   const updateStatus = async (founderId: string, status: 'approved' | 'rejected') => {
-    setActionPending(founderId, true)
+    setActionPending(founderId, status === 'approved' ? 'approve' : 'reject')
     setMessage(null)
 
     if (status === 'approved') {
       const { error } = await approveFounder(founderId)
 
       if (error) {
-        setMessage({ kind: 'error', text: error })
-        setActionPending(founderId, false)
+        showToast({ kind: 'error', text: error })
+        setActionPending(founderId, null)
         return
       }
 
-      setMessage({ kind: 'success', text: 'Founder approved.' })
-      setActionPending(founderId, false)
+      showToast({ kind: 'success', text: 'Founder approved successfully ✅' })
+      setActionPending(founderId, null)
       await loadFounders()
       return
     }
@@ -84,30 +126,30 @@ export function Admin() {
       .eq('id', founderId)
 
     if (error) {
-      setMessage({ kind: 'error', text: error.message })
-      setActionPending(founderId, false)
+      showToast({ kind: 'error', text: error.message })
+      setActionPending(founderId, null)
       return
     }
 
-    setMessage({ kind: 'success', text: 'Founder rejected.' })
-    setActionPending(founderId, false)
+    showToast({ kind: 'success', text: 'Founder rejected.' })
+    setActionPending(founderId, null)
     await loadFounders()
   }
 
   const toggleActive = async (founderId: string, nextActive: boolean) => {
-    setActionPending(founderId, true)
+    setActionPending(founderId, 'toggle')
     setMessage(null)
 
     const { error } = await toggleFounderActive(founderId, nextActive)
 
     if (error) {
-      setMessage({ kind: 'error', text: error })
-      setActionPending(founderId, false)
+      showToast({ kind: 'error', text: error })
+      setActionPending(founderId, null)
       return
     }
 
-    setMessage({ kind: 'success', text: `Founder ${nextActive ? 'activated' : 'removed from round'}.` })
-    setActionPending(founderId, false)
+    showToast({ kind: 'success', text: 'Founder status toggled 🟡' })
+    setActionPending(founderId, null)
     await loadFounders()
   }
 
@@ -134,12 +176,12 @@ export function Admin() {
     const { error } = await publishWinnerApi(selectedWinnerId, parsedWeek)
 
     if (error) {
-      setMessage({ kind: 'error', text: error })
+      showToast({ kind: 'error', text: error })
       setPublishLoading(false)
       return
     }
 
-    setMessage({ kind: 'success', text: 'Winner published and round reset.' })
+    showToast({ kind: 'success', text: 'Winner published 🎉' })
     setSelectedWinnerId('')
     setWeekNumber('')
     setPublishLoading(false)
@@ -154,21 +196,24 @@ export function Admin() {
       <AnimatePresence>
         {message && (
           <motion.div
-            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            key={message.text}
+            initial={{ opacity: 0, y: -12, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            className="mb-8"
+            exit={{ opacity: 0, y: -12, scale: 0.98 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            className="pointer-events-none fixed right-6 top-6 z-50 flex max-w-sm"
           >
-            <div className={`rounded-2xl border px-6 py-4 ${
-              message.kind === 'error' 
-                ? 'border-red-500/20 bg-red-500/10' 
-                : 'border-emerald-500/20 bg-emerald-500/10'
-            }`}>
-              <p className={`text-sm font-medium ${
-                message.kind === 'error' ? 'text-red-300' : 'text-emerald-300'
-              }`}>
-                {message.text}
-              </p>
+            <div
+              className={`pointer-events-auto flex w-full items-center gap-3 rounded-2xl border px-5 py-4 shadow-xl backdrop-blur-lg ${
+                message.kind === 'error'
+                  ? 'border-red-500/30 bg-red-500/15 text-red-50'
+                  : 'border-emerald-500/30 bg-emerald-500/15 text-emerald-50'
+              }`}
+            >
+              <span className="text-lg" aria-hidden="true">
+                {message.kind === 'error' ? '⚠️' : '✨'}
+              </span>
+              <p className="text-sm font-medium leading-snug">{message.text}</p>
             </div>
           </motion.div>
         )}
@@ -295,22 +340,36 @@ export function Admin() {
                           ) : null}
                         </div>
                       </div>
-                      <div className="flex gap-3 lg:flex-col lg:w-32">
+                      <div className="grid w-full gap-3 sm:grid-cols-2 lg:w-64">
                         <button
                           type="button"
                           onClick={() => updateStatus(founder.id, 'rejected')}
-                          disabled={actionState[founder.id]}
-                          className="flex-1 lg:flex-none rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-300 transition-all duration-200 hover:border-red-500/50 hover:bg-red-500/20 hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
+                          disabled={Boolean(actionState[founder.id])}
+                          className="flex items-center justify-center gap-2 rounded-2xl border border-red-500/40 bg-red-500/15 px-4 py-3 text-sm font-semibold text-red-200 transition-all duration-200 hover:border-red-500/60 hover:bg-red-500/25 hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
                         >
-                          Reject
+                          {actionState[founder.id] === 'reject' ? (
+                            <>
+                              <ButtonSpinner />
+                              <span>Rejecting…</span>
+                            </>
+                          ) : (
+                            'Reject'
+                          )}
                         </button>
                         <button
                           type="button"
                           onClick={() => updateStatus(founder.id, 'approved')}
-                          disabled={actionState[founder.id]}
-                          className="flex-1 lg:flex-none btn-primary disabled:cursor-not-allowed disabled:opacity-60 hover:scale-105 active:scale-95 disabled:hover:scale-100 transition-transform duration-200"
+                          disabled={Boolean(actionState[founder.id])}
+                          className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-500/90 px-4 py-3 text-sm font-semibold text-emerald-950 shadow-lg shadow-emerald-500/30 transition-all duration-200 hover:bg-emerald-400 hover:shadow-emerald-400/40 hover:scale-[1.03] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
                         >
-                          {actionState[founder.id] ? 'Processing...' : 'Approve'}
+                          {actionState[founder.id] === 'approve' ? (
+                            <>
+                              <ButtonSpinner />
+                              <span>Approving…</span>
+                            </>
+                          ) : (
+                            'Approve'
+                          )}
                         </button>
                       </div>
                     </div>
@@ -378,19 +437,23 @@ export function Admin() {
                       <button
                         type="button"
                         onClick={() => toggleActive(founder.id, !founder.is_active)}
-                        disabled={actionState[founder.id]}
-                        className={`rounded-2xl px-6 py-3 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60 lg:min-w-[180px] hover:scale-105 active:scale-95 disabled:hover:scale-100 ${
+                        disabled={Boolean(actionState[founder.id])}
+                        className={`flex items-center justify-center gap-2 rounded-2xl px-6 py-3 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60 lg:min-w-[200px] hover:scale-[1.03] active:scale-95 disabled:hover:scale-100 ${
                           founder.is_active
-                            ? 'bg-gradient-to-r from-egPink to-egPurple text-white shadow-lg shadow-egPink/25 hover:shadow-egPink/35'
-                            : 'border border-white/[0.12] bg-white/[0.03] text-white/70 hover:border-white/[0.2] hover:bg-white/[0.08] hover:text-white'
+                            ? 'border border-amber-400/60 bg-amber-400/20 text-amber-100 hover:bg-amber-400/30'
+                            : 'bg-amber-400 text-amber-950 shadow-lg shadow-amber-400/30 hover:bg-amber-300 hover:shadow-amber-300/40'
                         }`}
                       >
-                        {actionState[founder.id] 
-                          ? 'Processing...' 
-                          : founder.is_active 
-                          ? 'Active in round' 
-                          : 'Activate for round'
-                        }
+                        {actionState[founder.id] === 'toggle' ? (
+                          <>
+                            <ButtonSpinner />
+                            <span>Toggling…</span>
+                          </>
+                        ) : founder.is_active ? (
+                          'Active in round'
+                        ) : (
+                          'Activate for round'
+                        )}
                       </button>
                     </div>
                   </motion.article>
@@ -468,19 +531,15 @@ export function Admin() {
                   type="button"
                   onClick={handlePublishWinner}
                   disabled={publishLoading || activeFounders.length === 0}
-                  className="btn-primary lg:min-w-[160px] disabled:cursor-not-allowed disabled:opacity-60 hover:scale-105 active:scale-95 disabled:hover:scale-100 transition-transform duration-200"
+                  className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-egPurple to-egPink px-6 py-4 text-sm font-semibold text-white shadow-lg shadow-egPurple/30 transition-all duration-200 hover:scale-[1.04] hover:shadow-egPink/40 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
                 >
                   {publishLoading ? (
-                    <div className="flex items-center gap-2">
-                      <motion.div
-                        className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white"
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                      />
-                      Publishing…
-                    </div>
+                    <>
+                      <ButtonSpinner />
+                      <span>Publishing…</span>
+                    </>
                   ) : (
-                    'Publish winner'
+                    'Publish Weekly Winner'
                   )}
                 </button>
               </div>

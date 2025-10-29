@@ -10,11 +10,23 @@ const normalizeError = (error: { message: string } | null): string | null =>
   error ? error.message : null
 
 const resolveFunctionsBaseUrl = () => {
-  const url = import.meta.env.VITE_SUPABASE_URL
-  if (!url) {
+  const explicit = import.meta.env.VITE_SUPABASE_FUNCTION_URL
+  if (explicit) {
+    return explicit.replace(/\/$/, '')
+  }
+
+  const projectUrl = import.meta.env.VITE_SUPABASE_URL
+  if (!projectUrl) {
     throw new Error('Missing VITE_SUPABASE_URL environment variable')
   }
-  return `${url}/functions/v1`
+
+  const { hostname } = new URL(projectUrl)
+  const [projectRef, ...rest] = hostname.split('.')
+  if (!projectRef || rest.length === 0) {
+    throw new Error(`Unable to derive project reference from VITE_SUPABASE_URL (${projectUrl})`)
+  }
+
+  return `https://${projectRef}.functions.${rest.join('.')}`
 }
 
 const resolveAnonKey = () => {
